@@ -46,7 +46,7 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="localhost", help="host")
     parser.add_argument("--port", type=int, default=5555, help="port")
     parser.add_argument("--plot", action="store_true", help="plot images")
-    parser.add_argument("--modality_keys", nargs="+", type=str, default=["right_arm", "right_hand"])
+    parser.add_argument("--modality_keys", nargs="+", type=str, default=["right_arm", "left_arm"])
     parser.add_argument(
         "--data_config",
         type=str,

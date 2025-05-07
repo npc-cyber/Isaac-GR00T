@@ -297,8 +297,9 @@ class LeRobotSingleDataset(Dataset):
             try:
                 channels = le_video_meta["shape"][le_video_meta["names"].index("channel")]
                 fps = le_video_meta["video_info"]["video.fps"]
-            except ValueError:
-                channels = le_video_meta["shape"][le_video_meta["names"].index("channels")]
+            except (ValueError, KeyError):
+                # channels = le_video_meta["shape"][le_video_meta["names"].index("channels")]
+                channels = le_video_meta["info"]["video.channels"]
                 fps = le_video_meta["info"]["video.fps"]
             simplified_modality_meta["video"][new_key] = {
                 "resolution": [width, height],
@@ -875,3 +876,533 @@ class CachedLeRobotSingleDataset(LeRobotSingleDataset):
                 if key in all_video_keys:
                     metadata.modalities.video[key].resolution = self.img_resize
         super().set_transforms_metadata(metadata)
+
+
+import codecs
+import fnmatch
+import hashlib
+import os
+import pickle
+from collections import Counter
+from typing import Any, Callable, Dict, List, Optional, Union
+
+
+def safe_hash(input_tuple):
+    # keep 128 bits of the hash
+    tuple_string = repr(input_tuple).encode("utf-8")
+    sha256 = hashlib.sha256()
+    sha256.update(tuple_string)
+
+    seed = int(sha256.hexdigest(), 16)
+
+    return seed & 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
+
+
+
+from pydantic import BaseModel, Field
+
+
+class MixtureSpecElement(BaseModel):
+    dataset_path: list[Path] | Path = Field(..., description="The path to the dataset.")
+    dataset_weight: float = Field(..., description="The weight of the dataset in the mixture.")
+    distribute_weights: bool = Field(
+        default=False,
+        description="Whether to distribute the weights of the dataset across all the paths. If True, the weights will be evenly distributed across all the paths.",
+    )
+
+
+
+from typing import TypeVar
+from typing import Sequence
+T_LeRobotMixtureDataset = TypeVar("T_LeRobotMixtureDataset", bound="LeRobotMixtureDataset")
+
+
+class LeRobotMixtureDataset(Dataset):
+    """
+    A mixture of multiple datasets. This class samples a single dataset based on the dataset weights and then calls the `__getitem__` method of the sampled dataset.
+    It is recommended to modify the single dataset class instead of this class.
+    """
+
+    def __init__(
+        self,
+        data_mixture: Sequence[tuple[LeRobotSingleDataset, float]],
+        mode: str,
+        balance_dataset_weights: bool = True,
+        balance_trajectory_weights: bool = True,
+        seed: int = 42,
+        metadata_config: dict = {
+            "merge": False,
+            "percentile_mixing_method": "min_max",
+        },
+    ):
+        """
+        Initialize the mixture dataset.
+
+        Args:
+            data_mixture (list[tuple[LeRobotSingleDataset, float]]): Datasets and their corresponding weights.
+            mode (str): If "train", __getitem__ will return different samples every epoch; if "val" or "test", __getitem__ will return the same sample every epoch.
+            balance_dataset_weights (bool): If True, the weight of dataset will be multiplied by the total trajectory length of each dataset.
+            balance_trajectory_weights (bool): If True, sample trajectories within a dataset weighted by their length; otherwise, use equal weighting.
+            seed (int): Random seed for sampling.
+        """
+        datasets: list[LeRobotSingleDataset] = []
+        dataset_sampling_weights: list[float] = []
+        for dataset, weight in data_mixture:
+            datasets.append(dataset)
+            dataset_sampling_weights.append(weight)
+        self.datasets = datasets
+        self.balance_dataset_weights = balance_dataset_weights
+        self.balance_trajectory_weights = balance_trajectory_weights
+        self.seed = seed
+        self.mode = mode
+
+        # Set properties for sampling
+
+        # 1. Dataset lengths
+        self._dataset_lengths = np.array([len(dataset) for dataset in self.datasets])
+
+        # 2. Dataset sampling weights
+        self._dataset_sampling_weights = np.array(dataset_sampling_weights)
+        if self.balance_dataset_weights:
+            self._dataset_sampling_weights *= self._dataset_lengths
+        self._dataset_sampling_weights /= self._dataset_sampling_weights.sum()
+
+        # 3. Trajectory sampling weights
+        self._trajectory_sampling_weights: list[np.ndarray] = []
+        for dataset in self.datasets:
+            trajectory_sampling_weights = np.ones(len(dataset.trajectory_lengths))
+            if self.balance_trajectory_weights:
+                trajectory_sampling_weights *= dataset.trajectory_lengths
+            trajectory_sampling_weights /= trajectory_sampling_weights.sum()
+            self._trajectory_sampling_weights.append(trajectory_sampling_weights)
+
+        # 4. Primary dataset indices
+        self._primary_dataset_indices = np.array(dataset_sampling_weights) == 1.0
+        if not np.any(self._primary_dataset_indices):
+            raise ValueError(
+                "No primary dataset found, please at least set one dataset's weight to 1.0"
+            )
+
+        # Set the epoch and sample the first epoch
+        self.set_epoch(0)
+
+        self.update_metadata(metadata_config)
+        self.tag = EmbodimentTag.NEW_EMBODIMENT.value
+        self.metadata = self.datasets[0].metadata
+
+    @property
+    def dataset_lengths(self) -> np.ndarray:
+        """The lengths of each dataset."""
+        return self._dataset_lengths
+
+    @property
+    def dataset_sampling_weights(self) -> np.ndarray:
+        """The sampling weights for each dataset."""
+        return self._dataset_sampling_weights
+
+    @property
+    def trajectory_sampling_weights(self) -> list[np.ndarray]:
+        """The sampling weights for each trajectory in each dataset."""
+        return self._trajectory_sampling_weights
+
+    @property
+    def primary_dataset_indices(self) -> np.ndarray:
+        """The indices of the primary datasets."""
+        return self._primary_dataset_indices
+
+    def __str__(self) -> str:
+        dataset_descriptions = []
+        for dataset, weight in zip(self.datasets, self.dataset_sampling_weights):
+            dataset_description = {
+                "Dataset": str(dataset),
+                "Sampling weight": float(weight),
+            }
+            dataset_descriptions.append(dataset_description)
+        return U.yaml_dumps({"Mixture dataset": dataset_descriptions})
+
+    # @classmethod
+    # def from_mixture_spec(
+    #     cls: type[T_LeRobotMixtureDataset],
+    #     mixture_spec: Sequence[MixtureSpecElement | dict],
+    #     dataset_class: type[LeRobotSingleDataset] | str,
+    #     all_modality_configs: dict[str, dict[str, ModalityConfig]],
+    #     all_transforms: dict[str, ComposedModalityTransform],
+    #     dataset_kwargs: dict | None = None,
+    #     mixture_kwargs: dict | None = None,
+    # ) -> T_LeRobotMixtureDataset:
+    #     """Initialize the mixture dataset by dataset names and weights.
+
+    #     Args:
+    #         mixture_spec (list[MixtureSpec]): The specification for the mixture dataset.
+    #         all_modality_configs (dict[str, dict[str, ModalityConfig]]): The modality configs for the mixture dataset.
+    #         all_transforms (dict[str, ComposedModalityTransform]): The transforms for the mixture dataset.
+    #         metadata_versions (dict[str, str]): The metadata versions for the mixture dataset.
+    #         dataset_kwargs (dict): Additional keyword arguments for the dataset classes.
+    #         mixture_kwargs (dict): Additional keyword arguments for the mixture dataset.
+
+    #     Returns:
+    #         BaseMixtureDataset: The mixture dataset.
+    #     """
+    #     if isinstance(dataset_class, str):
+    #         module_name, class_name = dataset_class.rsplit(".", 1)
+    #         module = importlib.import_module(module_name)
+    #         dataset_class = getattr(module, class_name)
+    #     assert not isinstance(dataset_class, str), f"{dataset_class} is a string"
+    #     assert issubclass(
+    #         dataset_class, LeRobotSingleDataset
+    #     ), f"{dataset_class} is not a subclass of LeRobotSingleDataset"
+    #     data_mixture = []
+    #     for dataset_spec in mixture_spec:
+    #         if isinstance(dataset_spec, dict):
+    #             dataset_spec = MixtureSpecElement.model_validate(dataset_spec)
+    #         if not isinstance(dataset_spec.dataset_path, list):
+    #             assert isinstance(
+    #                 dataset_spec.dataset_path, Path
+    #             ), "dataset_path must be a Path or a list of Paths"
+    #             dataset_spec.dataset_path = [dataset_spec.dataset_path]
+    #         datasets = []
+    #         for dataset_path in dataset_spec.dataset_path:
+    #             dataset_tag = infer_embodiment_tag_from_dataset_path(dataset_path).value
+    #             assert (
+    #                 dataset_tag in all_modality_configs
+    #             ), f"{dataset_tag} not in modality_configs: {all_modality_configs.keys()}"
+    #             assert (
+    #                 dataset_tag in all_transforms
+    #             ), f"{dataset_tag} not in transforms: {all_transforms.keys()}"
+    #             dataset = dataset_class(
+    #                 dataset_path=dataset_path,
+    #                 modality_configs=deepcopy(all_modality_configs[dataset_tag]),
+    #                 transforms=deepcopy(all_transforms[dataset_tag]),
+    #                 **(dataset_kwargs if dataset_kwargs is not None else {}),
+    #             )
+    #             datasets.append(dataset)
+    #         dataset_lengths = np.array([len(dataset) for dataset in datasets])
+    #         dataset_relative_lengths = dataset_lengths / dataset_lengths.sum()
+    #         for dataset, relative_length in zip(datasets, dataset_relative_lengths):
+    #             if dataset_spec.distribute_weights:
+    #                 weight = relative_length * dataset_spec.dataset_weight
+    #             else:
+    #                 weight = dataset_spec.dataset_weight
+    #             data_mixture.append((dataset, weight))
+
+    #     return cls(
+    #         data_mixture=data_mixture,
+    #         **(mixture_kwargs if mixture_kwargs is not None else {}),
+    #     )
+
+    def set_epoch(self, epoch: int):
+        """Set the epoch for the dataset.
+
+        Args:
+            epoch (int): The epoch to set.
+        """
+        self.epoch = epoch
+        # self.sampled_steps = self.sample_epoch()
+
+    def sample_step(self, index: int) -> tuple[LeRobotSingleDataset, int, int]:
+        """Sample a single step from the dataset."""
+        # return self.sampled_steps[index]
+
+        # Set seed
+        seed = index if self.mode != "train" else safe_hash((self.epoch, index, self.seed))
+        rng = np.random.default_rng(seed)
+
+        # Sample dataset
+        dataset_index = rng.choice(len(self.datasets), p=self.dataset_sampling_weights)
+        dataset = self.datasets[dataset_index]
+
+        # Sample trajectory
+        trajectory_index = rng.choice(
+            len(dataset.trajectory_ids), p=self.trajectory_sampling_weights[dataset_index]
+        )
+        trajectory_id = dataset.trajectory_ids[trajectory_index]
+
+        # Sample step
+        base_index = rng.choice(dataset.trajectory_lengths[trajectory_index])
+        return dataset, trajectory_id, base_index
+
+    def __getitem__(self, index: int) -> dict:
+        """Get the data for a single trajectory and start index.
+
+        Args:
+            index (int): The index of the trajectory to get.
+
+        Returns:
+            dict: The data for the trajectory and start index.
+        """
+        dataset, trajectory_name, step = self.sample_step(index)
+        return dataset.transforms(dataset.get_step_data(trajectory_name, step))
+
+    def __len__(self) -> int:
+        """Get the length of a single epoch in the mixture.
+
+        Returns:
+            int: The length of a single epoch in the mixture.
+        """
+        return int(
+            (self.dataset_lengths / self.dataset_sampling_weights)[
+                self.primary_dataset_indices
+            ].max()
+        )
+
+    @staticmethod
+    def compute_overall_statistics(
+        per_task_stats: list[dict[str, dict[str, list[float] | np.ndarray]]],
+        dataset_sampling_weights: list[float] | np.ndarray,
+        percentile_mixing_method: str = "weighted_average",
+    ) -> dict[str, dict[str, list[float]]]:
+        """
+        Computes overall statistics from per-task statistics using dataset sample weights.
+
+        Args:
+            per_task_stats: List of per-task statistics.
+            Example format of one element in the per-task statistics list:
+                {
+                    "state.gripper": {
+                        "min": [...],
+                        "max": [...],
+                        "mean": [...],
+                        "std": [...],
+                        "q01": [...],
+                        "q99": [...],
+                    },
+                    ...
+                }
+            dataset_sampling_weights: List of sample weights for each task.
+            percentile_mixing_method: The method to mix the percentiles, either "weighted_average" or "weighted_std".
+
+        Returns:
+            A dict of overall statistics per modality.
+        """
+        # Normalize the sample weights to sum to 1
+        dataset_sampling_weights = np.array(dataset_sampling_weights)
+        normalized_weights = dataset_sampling_weights / dataset_sampling_weights.sum()
+
+        # Initialize overall statistics dict
+        overall_stats: dict[str, dict[str, list[float]]] = {}
+
+        # Get the list of modality keys
+        modality_keys = per_task_stats[0].keys()
+
+        for modality in modality_keys:
+            # Number of dimensions (assuming consistent across tasks)
+            num_dims = len(per_task_stats[0][modality]["mean"])
+
+            # Initialize accumulators for means and variances
+            weighted_means = np.zeros(num_dims)
+            weighted_squares = np.zeros(num_dims)
+
+            # Collect min, max, q01, q99 from all tasks
+            min_list = []
+            max_list = []
+            q01_list = []
+            q99_list = []
+
+            for task_idx, task_stats in enumerate(per_task_stats):
+                w_i = normalized_weights[task_idx]
+                stats = task_stats[modality]
+                means = np.array(stats["mean"])
+                stds = np.array(stats["std"])
+
+                # Update weighted sums for mean and variance
+                weighted_means += w_i * means
+                weighted_squares += w_i * (stds**2 + means**2)
+
+                # Collect min, max, q01, q99
+                min_list.append(stats["min"])
+                max_list.append(stats["max"])
+                q01_list.append(stats["q01"])
+                q99_list.append(stats["q99"])
+
+            # Compute overall mean
+            overall_mean = weighted_means.tolist()
+
+            # Compute overall variance and std deviation
+            overall_variance = weighted_squares - weighted_means**2
+            overall_std = np.sqrt(overall_variance).tolist()
+
+            # Compute overall min and max per dimension
+            overall_min = np.min(np.array(min_list), axis=0).tolist()
+            overall_max = np.max(np.array(max_list), axis=0).tolist()
+
+            # Compute overall q01 and q99 per dimension
+            # Use weighted average of per-task quantiles
+            q01_array = np.array(q01_list)
+            q99_array = np.array(q99_list)
+            if percentile_mixing_method == "weighted_average":
+                weighted_q01 = np.average(q01_array, axis=0, weights=normalized_weights).tolist()
+                weighted_q99 = np.average(q99_array, axis=0, weights=normalized_weights).tolist()
+                # std_q01 = np.std(q01_array, axis=0).tolist()
+                # std_q99 = np.std(q99_array, axis=0).tolist()
+                # print(modality)
+                # print(f"{std_q01=}, {std_q99=}")
+                # print(f"{weighted_q01=}, {weighted_q99=}")
+            elif percentile_mixing_method == "min_max":
+                weighted_q01 = np.min(q01_array, axis=0).tolist()
+                weighted_q99 = np.max(q99_array, axis=0).tolist()
+            else:
+                raise ValueError(f"Invalid percentile mixing method: {percentile_mixing_method}")
+
+            # Store the overall statistics for the modality
+            overall_stats[modality] = {
+                "min": overall_min,
+                "max": overall_max,
+                "mean": overall_mean,
+                "std": overall_std,
+                "q01": weighted_q01,
+                "q99": weighted_q99,
+            }
+
+        return overall_stats
+
+    # @staticmethod
+    # def merge_metadata(
+    #     metadatas: list[TrainableDatasetMetadata_V1_2],
+    #     dataset_sampling_weights: list[float],
+    #     percentile_mixing_method: str,
+    # ) -> TrainableDatasetMetadata_V1_2:
+    #     """Merge multiple metadata into one."""
+    #     # Convert to dicts
+    #     metadata_dicts = [metadata.model_dump(mode="json") for metadata in metadatas]
+    #     # Create a new metadata dict
+    #     merged_metadata = {}
+
+    #     # Merge the dataset statistics
+    #     dataset_statistics = {}
+    #     dataset_statistics["state"] = LeRobotMixtureDataset.compute_overall_statistics(
+    #         per_task_stats=[m["dataset_statistics"]["state"] for m in metadata_dicts],
+    #         dataset_sampling_weights=dataset_sampling_weights,
+    #         percentile_mixing_method=percentile_mixing_method,
+    #     )
+    #     dataset_statistics["action"] = LeRobotMixtureDataset.compute_overall_statistics(
+    #         per_task_stats=[m["dataset_statistics"]["action"] for m in metadata_dicts],
+    #         dataset_sampling_weights=dataset_sampling_weights,
+    #         percentile_mixing_method=percentile_mixing_method,
+    #     )
+    #     dataset_statistics["total_trajectory_length"] = sum(
+    #         m["dataset_statistics"]["total_trajectory_length"] for m in metadata_dicts
+    #     )
+    #     dataset_statistics["num_trajectories"] = sum(
+    #         m["dataset_statistics"]["num_trajectories"] for m in metadata_dicts
+    #     )
+    #     merged_metadata["dataset_statistics"] = dataset_statistics
+
+    #     # Merge the modality configs
+    #     modality_configs = defaultdict(set)
+    #     for metadata in metadata_dicts:
+    #         for modality, configs in metadata["modalities"].items():
+    #             modality_configs[modality].add(U.json_dumps(configs))
+    #     merged_metadata["modalities"] = {}
+    #     for modality, configs in modality_configs.items():
+    #         # This is a temporary patch for robocasa_gr1_arms_only_fourier_hands
+    #         # because this embodiment is shared by 7DC and 9W
+    #         # but the video modality is actually different
+    #         # TODO: 1: Ask Fengyuan how to fix the data
+    #         """PATCH"""
+    #         tag = metadata_dicts[0]["dataset_name"].split(":")[0]
+    #         if tag == "robocasa_gr1_arms_only_fourier_hands" and modality == "video":
+    #             # If this is the exceptional case: robocasa_gr1_arms_only_fourier_hands and video
+    #             assert (
+    #                 len(configs) <= 2
+    #             ), f"Multiple modality configs for modality {modality}: {list(configs)}"
+    #         else:
+    #             # Otherwise, keep the original assertion
+    #             assert (
+    #                 len(configs) == 1
+    #             ), f"Multiple modality configs for modality {modality}: {list(configs)}"
+
+    #         if len(configs) == 1:
+    #             # The original practice
+    #             merged_metadata["modalities"][modality] = U.json_loads(configs.pop())
+    #         elif len(configs) == 2:
+    #             # If this is exceptional case, then we merge the two video modalities
+    #             configs = list(configs)
+    #             config_0 = U.json_loads(configs[0])
+    #             config_1 = U.json_loads(configs[1])
+    #             config = {**config_0, **config_1}
+    #             merged_metadata["modalities"][modality] = config
+    #         else:
+    #             raise ValueError(f"{len(configs)=}")
+    #         """ /PATCH """
+    #         """ ORIGINAL """
+    #         # assert (
+    #         #     len(configs) == 1
+    #         # ), f"Multiple modality configs for modality {modality}: {list(configs)}"
+    #         # merged_metadata["modalities"][modality] = U.json_loads(configs.pop())
+    #         """ /ORIGINAL """
+
+    #     # Merge embodiment metadata
+    #     embodiment_metadatas = [
+    #         TrainableEmbodimentMetadata_V1_2.model_validate(m["embodiment"]) for m in metadata_dicts
+    #     ]
+    #     merged_embodiment_metadata = TrainableEmbodimentMetadata_V1_2.merge_raw(
+    #         embodiment_metadatas  # type: ignore
+    #     )
+    #     merged_metadata["embodiment"] = merged_embodiment_metadata.model_dump(mode="json")
+
+    #     merged_metadata["dataset_name"] = ", ".join([dataset.dataset_name for dataset in metadatas])
+
+    #     # Assert that all metadata points to the same image transform
+    #     image_transform_temp = None
+    #     for metadata_dict in metadata_dicts:
+    #         if metadata_dict["processing"] is None:
+    #             continue
+    #         processor_name = metadata_dict["processing"]["processor"]
+    #         image_transform = get_image_transform_with_processor_name(processor_name=processor_name)
+    #         if image_transform_temp is None:
+    #             image_transform_temp = image_transform
+    #         else:
+    #             if isinstance(image_transform, partial):
+    #                 assert isinstance(
+    #                     image_transform_temp, partial
+    #                 ), f"{image_transform=}, {image_transform_temp=}"
+    #                 assert (
+    #                     image_transform.func == image_transform_temp.func
+    #                 ), f"{image_transform=}, {image_transform_temp=}"
+    #                 assert (
+    #                     image_transform.args == image_transform_temp.args
+    #                 ), f"{image_transform=}, {image_transform_temp=}"
+    #             else:
+    #                 assert (
+    #                     image_transform == image_transform_temp
+    #                 ), f"{image_transform=}, {image_transform_temp=}"
+
+    #     merged_metadata["processing"] = metadata_dicts[0]["processing"]
+
+    #     return TrainableDatasetMetadata_V1_2.model_validate(merged_metadata)
+
+    def update_metadata(self, metadata_config: dict) -> None:
+        """Merge multiple metadatas into one and set the transforms with the merged metadata.
+
+        Args:
+            metadata_config (dict): Configuration for the metadata.
+                "merge": If True, merge the metadata of all datasets.
+                "percentile_mixing_method": The method to mix the percentiles, either "weighted_average" or "min_max".
+                    weighted_average: Use the weighted average of the percentiles using the weight used in sampling the datasets.
+                    min_max: Use the min of the 1st percentile and max of the 99th percentile.
+        """
+
+        self.tag = EmbodimentTag.NEW_EMBODIMENT.value
+        for dataset in self.datasets:
+            dataset.set_transforms_metadata(dataset.metadata)
+        return
+
+        self.merged_metadata = {}
+        if metadata_config["merge"]:
+            # Group metadata by tag
+            metadatas = {}
+            for dataset in self.datasets:
+                if dataset.tag not in metadatas:
+                    metadatas[dataset.tag] = []
+                metadatas[dataset.tag].append(dataset.metadata)
+            for tag, metadatas in metadatas.items():
+                self.merged_metadata[tag] = self.merge_metadata(
+                    metadatas=metadatas,
+                    dataset_sampling_weights=self.dataset_sampling_weights.tolist(),
+                    percentile_mixing_method=metadata_config["percentile_mixing_method"],
+                )
+            for dataset in self.datasets:
+                dataset.set_transforms_metadata(self.merged_metadata[dataset.tag])
+
+        else:
+            self.merged_metadata = None

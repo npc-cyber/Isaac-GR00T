@@ -23,7 +23,7 @@ import torch
 import tyro
 from transformers import TrainingArguments
 
-from gr00t.data.dataset import LeRobotSingleDataset
+from gr00t.data.dataset import LeRobotSingleDataset, LeRobotMixtureDataset
 from gr00t.data.schema import EmbodimentTag
 from gr00t.experiment.data_config import DATA_CONFIG_MAP
 from gr00t.experiment.runner import TrainRunner
@@ -38,6 +38,9 @@ class Config:
     # Dataset parameters
     dataset_path: str
     """Path to the dataset directory."""
+    
+    dataset2_path: str | None = None
+    """Path to the second dataset directory."""
 
     output_dir: str = "/tmp/gr00t"
     """Directory to save model checkpoints."""
@@ -133,6 +136,22 @@ def main(config: Config):
         embodiment_tag=embodiment_tag,  # This will override the dataset's embodiment tag to "new_embodiment"
         video_backend=config.video_backend,
     )
+
+    if config.dataset2_path:
+        dataset2 = LeRobotSingleDataset(
+            dataset_path=config.dataset2_path,
+            modality_configs=modality_configs,
+            embodiment_tag=embodiment_tag,
+            video_backend=config.video_backend,
+        )
+        train_dataset = LeRobotMixtureDataset(
+            data_mixture=[(train_dataset, 1.0), (dataset2, 1.0)],
+            mode="train",
+            balance_dataset_weights=True,
+            balance_trajectory_weights=True,
+            seed=42,
+        )
+        print(f"Loaded {len(train_dataset)} trajectories from {config.dataset_path} and {len(dataset2)} trajectories from {config.dataset2_path}")
 
     # ------------ step 2: load model ------------
     model = GR00T_N1.from_pretrained(
