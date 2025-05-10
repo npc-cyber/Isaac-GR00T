@@ -223,7 +223,7 @@ class So100DataConfig(BaseDataConfig):
 class G1DataConfig(BaseDataConfig):
     video_keys = ["video.rs_view"]
     state_keys = ["state.dummy_tensor"]
-    action_keys = ["action.left_arm", "action.right_arm"]
+    action_keys = ["action.left_arm", "action.right_arm", "action.left_hand", "action.right_hand"]
     language_keys = ["annotation.human.task_description"]
     observation_indices = [0]
     action_indices = list(range(16))
@@ -299,6 +299,16 @@ class G1DataConfig(BaseDataConfig):
             ),
         ]
         return ComposedModalityTransform(transforms=transforms)
+
+###########################################################################################
+
+class G1V2DataConfig(G1DataConfig):
+    video_keys = ["video.rs_view"]
+    state_keys = ["state.left_arm", "state.right_arm", "state.left_hand", "state.right_hand"]
+    action_keys = ["action.left_arm", "action.right_arm", "action.left_hand", "action.right_hand"]
+    language_keys = ["annotation.human.task_description"]
+    observation_indices = [0]
+    action_indices = list(range(16))
 
 
 ###########################################################################################
@@ -766,4 +776,5 @@ DATA_CONFIG_MAP = {
     "single_panda_gripper": SinglePandaGripperDataConfig(),
     "so100": So100DataConfig(),
     "g1": G1DataConfig(),
+    "g1_v2": G1V2DataConfig(),
 }

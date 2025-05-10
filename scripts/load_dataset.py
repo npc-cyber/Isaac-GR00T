@@ -24,6 +24,7 @@ from pprint import pprint
 
 import matplotlib.pyplot as plt
 import numpy as np
+import time
 
 from gr00t.data.dataset import (
     LE_ROBOT_MODALITY_FILENAME,
@@ -125,9 +126,9 @@ def plot_state_action_space(state_dict: dict[str, np.ndarray], action_dict: dict
     #     ax.set_xlabel("Time")
     #     ax.set_ylabel("Value")
     #     ax.grid(True)
-    
     plt.tight_layout()
-    plt.show()
+    # plt.savefig("output_figure1.png")  # Save the plot to a file
+    # plt.show()
 
 def plot_image(image: np.ndarray):
     """
@@ -140,7 +141,7 @@ def plot_image(image: np.ndarray):
     plt.clf()  # Clear the figure for the next frame
 
 
-def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "decord"):
+def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "decord", steps: int = 220):
     # 1. get modality keys
     dataset_path = pathlib.Path(dataset_path)
     modality_keys_dict = get_modality_keys(dataset_path)
@@ -153,6 +154,9 @@ def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "d
 
     print(f"state_modality_keys: {state_modality_keys}")
     print(f"action_modality_keys: {action_modality_keys}")
+    
+    # remove dummy_tensor from state_modality_keys
+    state_modality_keys = [key for key in state_modality_keys if key != "state.dummy_tensor"]
 
     # 2. modality configs
     modality_configs = {
@@ -243,15 +247,15 @@ def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "d
         key: [] for key in action_modality_keys
     }
 
-    SKIP_FRAMES = 20
+    SKIP_FRAMES = 3
 
-    for i in range(350):
+    for i in range(steps):
         resp = dataset[i]
         if i % SKIP_FRAMES == 0:
             img = resp[video_key][0]
 
             # cv2 show the image
-            plot_image(img)
+            # plot_image(img)
             print(f"Image {i}")
             images_list.append(img.copy())
 
@@ -259,6 +263,7 @@ def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "d
             state_dict[state_key].append(resp[state_key][0])
         for action_key in action_modality_keys:
             action_dict[action_key].append(resp[action_key][0])
+        time.sleep(0.05)
 
     # convert lists of [np[D]] T size to np(T, D)
     for state_key in state_modality_keys:
@@ -273,12 +278,13 @@ def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "d
         plot_state_action_space(state_dict, action_dict)
         print("Plotted state and action space")
 
-    fig, axs = plt.subplots(2, 5, figsize=(20, 10))
+    fig, axs = plt.subplots(4, 5, figsize=(20, 10))
     for i, ax in enumerate(axs.flat):
         ax.imshow(images_list[i])
         ax.axis("off")
         ax.set_title(f"Image {i*SKIP_FRAMES}")
     plt.tight_layout()  # adjust the subplots to fit into the figure area.
+    # plt.savefig("output_figure2.png")  # Save the plot to a file
     plt.show()
 
 
@@ -308,5 +314,16 @@ if __name__ == "__main__":
         action="store_true",
         help="Plot the state and action space",
     )
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=150,
+        help="Number of steps to plot",
+    )
+    # parser.add_argument(
+    #     "--plot_rerun",
+    #     action="store_true",
+    #     help="Plot the dataset using rerun",
+    # )
     args = parser.parse_args()
-    load_dataset(args.data_path, args.embodiment_tag, args.video_backend)
+    load_dataset(args.data_path, args.embodiment_tag, args.video_backend, args.steps)
