@@ -188,31 +188,31 @@ def load_dataset(
         video_backend=video_backend,
     )
 
-    # dataset2 = LeRobotSingleDataset(
-    #     dataset_path="/datasets/so100_strawberry_grape",
-    #     modality_configs=modality_configs,
-    #     embodiment_tag=embodiment_tag,
-    #     video_backend=video_backend,
-    # )
+    dataset2 = LeRobotSingleDataset(
+        dataset_path=dataset_path,
+        modality_configs=modality_configs,
+        embodiment_tag=embodiment_tag,
+        video_backend=video_backend,
+    )
 
-    # #   mixture_kwargs:
-    # #     mode: train
-    # #     balance_dataset_weights: true
-    # #     seed: 42
-    # #     metadata_config:
-    # #       merge: true
-    # #       percentile_mixing_method: min_max
-    # dataset = LeRobotMixtureDataset(
-    #     data_mixture=[(dataset, 1.0), (dataset2, 1.0)],
-    #     mode="train",
-    #     balance_dataset_weights=True,
-    #     balance_trajectory_weights=True,
-    #     seed=42,
-    #     metadata_config={
-    #         "merge": True,
-    #         "percentile_mixing_method": "min_max",
-    #     },
-    # )
+    #   mixture_kwargs:
+    #     mode: train
+    #     balance_dataset_weights: true
+    #     seed: 42
+    #     metadata_config:
+    #       merge: true
+    #       percentile_mixing_method: min_max
+    dataset = LeRobotMixtureDataset(
+        data_mixture=[(dataset, 1.0), (dataset2, 1.0)],
+        mode="train",
+        balance_dataset_weights=True,
+        balance_trajectory_weights=True,
+        seed=42,
+        metadata_config={
+            "merge": True,
+            "percentile_mixing_method": "min_max",
+        },
+    )
 
     print("\n" * 2)
     print("=" * 100)
