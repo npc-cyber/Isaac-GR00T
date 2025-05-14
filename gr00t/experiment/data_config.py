@@ -217,6 +217,7 @@ class So100DataConfig(BaseDataConfig):
         ]
         return ComposedModalityTransform(transforms=transforms)
 
+
 ###########################################################################################
 
 
@@ -300,7 +301,9 @@ class G1DataConfig(BaseDataConfig):
         ]
         return ComposedModalityTransform(transforms=transforms)
 
+
 ###########################################################################################
+
 
 class G1V2DataConfig(G1DataConfig):
     video_keys = ["video.rs_view"]

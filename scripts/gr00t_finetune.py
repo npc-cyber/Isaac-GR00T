@@ -38,7 +38,7 @@ class Config:
     # Dataset parameters
     dataset_path: str
     """Path to the dataset directory."""
-    
+
     dataset2_path: str | None = None
     """Path to the second dataset directory."""
 
@@ -151,7 +151,9 @@ def main(config: Config):
             balance_trajectory_weights=True,
             seed=42,
         )
-        print(f"Loaded {len(train_dataset)} trajectories from {config.dataset_path} and {len(dataset2)} trajectories from {config.dataset2_path}")
+        print(
+            f"Loaded {len(train_dataset)} trajectories from {config.dataset_path} and {len(dataset2)} trajectories from {config.dataset2_path}"
+        )
 
     # ------------ step 2: load model ------------
     model = GR00T_N1.from_pretrained(

@@ -44,7 +44,6 @@ from tqdm import tqdm
 #################################################################################
 
 
-
 class SO100Robot:
     def __init__(self, calibrate=False, enable_camera=False, cam_idx=9):
         self.config = So100RobotConfig()
@@ -58,7 +57,8 @@ class SO100Robot:
 
         # Set the robot arms
         if True:
-            from lerobot.common.robot_devices.motors.configs import FeetechMotorsBusConfig   
+            from lerobot.common.robot_devices.motors.configs import FeetechMotorsBusConfig
+
             self.config.follower_arms = {
                 "main": FeetechMotorsBusConfig(
                     port="/dev/ttyACM0",
@@ -195,7 +195,6 @@ class SO100Robot:
 #################################################################################
 
 
-
 # policy = DiffusionPolicy.from_pretrained(
 #     "/home/youliang/lerobot/outputs/train/so100_dp001/checkpoints/100000/pretrained_model"
 # )
@@ -236,9 +235,11 @@ class SO100Robot:
 import torch
 import numpy as np
 
+
 class DiffusionPolicy:
     def __init__(self, model_path, device="cuda"):
         from lerobot.common.policies.diffusion.modeling_diffusion import DiffusionPolicy
+
         self.policy = DiffusionPolicy.from_pretrained(model_path)
         self.device = device
         self.horizon = self.policy.config.n_action_steps
@@ -273,9 +274,11 @@ class DiffusionPolicy:
         assert actions.shape == (self.horizon, 6), actions.shape
         return actions
 
+
 class Pi0Policy:
     def __init__(self, model_path, language_instruction, device="cuda"):
         from lerobot.common.policies.pi0.modeling_pi0 import PI0Policy
+
         self.policy = PI0Policy.from_pretrained(model_path)
         self.device = device
         self.horizon = self.policy.config.n_action_steps
@@ -285,7 +288,7 @@ class Pi0Policy:
         img = torch.from_numpy(img).to(self.device)
         img = img.to(torch.float32) / 255.0
         img = img.permute(2, 0, 1).contiguous()
-        
+
         # add batch dimension
         img = img[np.newaxis, :, :, :]
         state = state[np.newaxis, :]
@@ -306,7 +309,7 @@ class Pi0Policy:
             actions.append(action)
         # return (horizon, action_dim)
         actions = np.concatenate(actions, axis=0)
-        assert actions.shape == (self.horizon, 6), actions.shape       
+        assert actions.shape == (self.horizon, 6), actions.shape
         # print(actions.shape)
         return actions
 
@@ -367,6 +370,7 @@ def view_img(img, img2=None):
 def print_yellow(text):
     print("\033[93m {}\033[00m".format(text))
 
+
 def get_language(language_instruction=None):
     if language_instruction is None:
         # get the language instruction from the user
@@ -384,8 +388,9 @@ def get_language(language_instruction=None):
         # convert to int
         language_instruction = int(language_instruction)
         print("lang_instruction converted to int: ", language_instruction)
-        
+
         from tictac_bot import TaskToString
+
         num = int(language_instruction)
         if num == 1:
             language_instruction = TaskToString.TOP_RIGHT
@@ -405,7 +410,7 @@ def get_language(language_instruction=None):
             language_instruction = TaskToString.CENTER_BOTTOM
         elif num == 9:
             language_instruction = TaskToString.BOTTOM_LEFT
-        else:  
+        else:
             print("Invalid lang_instruction number. Please enter a number between 1 and 9.")
             exit(1)
         # convert to string
@@ -413,6 +418,7 @@ def get_language(language_instruction=None):
         print("lang_instruction converted to string: ", language_instruction)
     print("lang_instruction: ", language_instruction)
     return language_instruction
+
 
 #################################################################################
 
@@ -482,14 +488,16 @@ if __name__ == "__main__":
 
         robot = SO100Robot(calibrate=False, enable_camera=True, cam_idx=args.cam_idx)
         image_count = 0
-            # for i in tqdm(range(ACTIONS_TO_EXECUTE), desc="Executing actions"):
+        # for i in tqdm(range(ACTIONS_TO_EXECUTE), desc="Executing actions"):
         with robot.activate():
-            while True:    
+            while True:
                 eps_start_time = time.time()
                 # check if timeout is reached
                 while time.time() - eps_start_time < args.timeout:
                     # get the realtime image
-                    print_yellow(f" Current elapsed time: {time.time() - eps_start_time:.2f} seconds")
+                    print_yellow(
+                        f" Current elapsed time: {time.time() - eps_start_time:.2f} seconds"
+                    )
                     img = robot.get_current_img()
                     view_img(img)
                     state = robot.get_current_state()
@@ -500,7 +508,10 @@ if __name__ == "__main__":
                             concat_action = action[i]
                         else:
                             concat_action = np.concatenate(
-                                [np.atleast_1d(action[f"action.{key}"][i]) for key in MODALITY_KEYS],
+                                [
+                                    np.atleast_1d(action[f"action.{key}"][i])
+                                    for key in MODALITY_KEYS
+                                ],
                                 axis=0,
                             )
                         assert concat_action.shape == (6,), concat_action.shape
@@ -541,8 +552,8 @@ if __name__ == "__main__":
             print("Run replay of the dataset")
             actions = []
             for i in tqdm(range(ACTIONS_TO_EXECUTE), desc="Loading actions"):
-            # while True:
-            #     i = 0
+                # while True:
+                #     i = 0
                 action = dataset[i]["action"]
                 img = dataset[i]["observation.images.webcam"].data.numpy()
                 # original shape (3, 480, 640) for image data

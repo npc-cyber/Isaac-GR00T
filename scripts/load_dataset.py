@@ -54,29 +54,30 @@ def get_modality_keys(dataset_path: pathlib.Path) -> dict[str, list[str]]:
             modality_dict[key].append(f"{key}.{modality}")
     return modality_dict
 
+
 def plot_state_action_space(state_dict: dict[str, np.ndarray], action_dict: dict[str, np.ndarray]):
     """
     Plot the state and action space side by side.
-    
+
     state_dict: dict[str, np.ndarray] with key: [Time, Dimension]
     action_dict: dict[str, np.ndarray] with key: [Time, Dimension]
     """
     # Calculate total number of plots needed
     total_plots = len(state_dict) + len(action_dict)
-    
+
     # Create a figure with two columns - left for states, right for actions
     fig = plt.figure(figsize=(16, 2 * max(len(state_dict), len(action_dict))))
-    
+
     # Create GridSpec to organize the layout
     gs = fig.add_gridspec(max(len(state_dict), len(action_dict)), 1)
-    
+
     # Plot state and action data together
     # e.g. action.left_arm, state.left_arm, action.right_arm, state.right_arm, etc.
     shared_keys = ["left_arm", "right_arm", "left_hand", "right_hand"]
-    
+
     # Color palette for different dimensions
     colors = plt.cm.tab10.colors
-    
+
     for i, key in enumerate(shared_keys):
         state_key = f"state.{key}"
         action_key = f"action.{key}"
@@ -84,51 +85,44 @@ def plot_state_action_space(state_dict: dict[str, np.ndarray], action_dict: dict
         # plot state and action data on the same plot
         # and label the lines with the key
         ax = fig.add_subplot(gs[i, 0])
-        
+
         # Get the data
         state_data = state_dict[state_key]
         action_data = action_dict[action_key]
-        
+
         # Plot each dimension with a different color
         for dim in range(state_data.shape[1]):
             # State with dashed line
-            ax.plot(state_data[:, dim], '--', color=colors[dim % len(colors)], 
-                   linewidth=1.5, label=f"state dim {dim}")
-            
+            ax.plot(
+                state_data[:, dim],
+                "--",
+                color=colors[dim % len(colors)],
+                linewidth=1.5,
+                label=f"state dim {dim}",
+            )
+
             # Action with solid line (same color as corresponding state dimension)
-            ax.plot(action_data[:, dim], '-', color=colors[dim % len(colors)], 
-                   linewidth=2, label=f"action dim {dim}")
-        
+            ax.plot(
+                action_data[:, dim],
+                "-",
+                color=colors[dim % len(colors)],
+                linewidth=2,
+                label=f"action dim {dim}",
+            )
+
         ax.set_title(f"{key}")
         ax.set_xlabel("Time")
         ax.set_ylabel("Value")
-        ax.grid(True, linestyle=':', alpha=0.7)
-        
+        ax.grid(True, linestyle=":", alpha=0.7)
+
         # Create a more organized legend
         handles, labels = ax.get_legend_handles_labels()
         # Sort the legend so state and action for each dimension are grouped
         by_label = dict(zip(labels, handles))
-        ax.legend(by_label.values(), by_label.keys(), loc='upper right')
+        ax.legend(by_label.values(), by_label.keys(), loc="upper right")
 
-    # for i, (key, state_data) in enumerate(state_dict.items()):
-    #     ax = fig.add_subplot(gs[i, 0])
-    #     ax.plot(state_data)
-    #     ax.set_title(f"State: {key}")
-    #     ax.set_xlabel("Time")
-    #     ax.set_ylabel("Value")
-    #     ax.grid(True)
-    
-    # # Plot action data on the right column
-    # for i, (key, action_data) in enumerate(action_dict.items()):
-    #     ax = fig.add_subplot(gs[i, 1])
-    #     ax.plot(action_data)
-    #     ax.set_title(f"Action: {key}")
-    #     ax.set_xlabel("Time")
-    #     ax.set_ylabel("Value")
-    #     ax.grid(True)
     plt.tight_layout()
-    # plt.savefig("output_figure1.png")  # Save the plot to a file
-    # plt.show()
+
 
 def plot_image(image: np.ndarray):
     """
@@ -136,12 +130,14 @@ def plot_image(image: np.ndarray):
     """
     # matplotlib show the image
     plt.imshow(image)
-    plt.axis('off')
+    plt.axis("off")
     plt.pause(0.05)  # Non-blocking show
     plt.clf()  # Clear the figure for the next frame
 
 
-def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "decord", steps: int = 220):
+def load_dataset(
+    dataset_path: str, embodiment_tag: str, video_backend: str = "decord", steps: int = 220
+):
     # 1. get modality keys
     dataset_path = pathlib.Path(dataset_path)
     modality_keys_dict = get_modality_keys(dataset_path)
@@ -154,7 +150,7 @@ def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "d
 
     print(f"state_modality_keys: {state_modality_keys}")
     print(f"action_modality_keys: {action_modality_keys}")
-    
+
     # remove dummy_tensor from state_modality_keys
     state_modality_keys = [key for key in state_modality_keys if key != "state.dummy_tensor"]
 
@@ -240,20 +236,16 @@ def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "d
     images_list = []
     video_key = video_modality_keys[0]  # we will use the first video modality
 
-    state_dict = {
-        key: [] for key in state_modality_keys
-    }
-    action_dict = {
-        key: [] for key in action_modality_keys
-    }
+    state_dict = {key: [] for key in state_modality_keys}
+    action_dict = {key: [] for key in action_modality_keys}
 
-    SKIP_FRAMES = 3
+    total_images = 20  # show 20 images
+    skip_frames = steps // total_images
 
     for i in range(steps):
         resp = dataset[i]
-        if i % SKIP_FRAMES == 0:
+        if i % skip_frames == 0:
             img = resp[video_key][0]
-
             # cv2 show the image
             # plot_image(img)
             print(f"Image {i}")
@@ -278,13 +270,12 @@ def load_dataset(dataset_path: str, embodiment_tag: str, video_backend: str = "d
         plot_state_action_space(state_dict, action_dict)
         print("Plotted state and action space")
 
-    fig, axs = plt.subplots(4, 5, figsize=(20, 10))
+    fig, axs = plt.subplots(4, total_images // 4, figsize=(20, 10))
     for i, ax in enumerate(axs.flat):
         ax.imshow(images_list[i])
         ax.axis("off")
-        ax.set_title(f"Image {i*SKIP_FRAMES}")
+        ax.set_title(f"Image {i*skip_frames}")
     plt.tight_layout()  # adjust the subplots to fit into the figure area.
-    # plt.savefig("output_figure2.png")  # Save the plot to a file
     plt.show()
 
 
@@ -320,10 +311,5 @@ if __name__ == "__main__":
         default=150,
         help="Number of steps to plot",
     )
-    # parser.add_argument(
-    #     "--plot_rerun",
-    #     action="store_true",
-    #     help="Plot the dataset using rerun",
-    # )
     args = parser.parse_args()
     load_dataset(args.data_path, args.embodiment_tag, args.video_backend, args.steps)
