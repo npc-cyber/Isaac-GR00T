@@ -48,6 +48,9 @@ class Config:
     data_config: str = "gr1_arms_only"
     """Data configuration name from DATA_CONFIG_MAP."""
 
+    data_config2: str | None = None
+    """Data configuration name from DATA_CONFIG_MAP."""
+
     # Training parameters
     batch_size: int = 16
     """Batch size per GPU for training."""
@@ -127,6 +130,14 @@ def main(config: Config):
     data_config_cls = DATA_CONFIG_MAP[config.data_config]
     modality_configs = data_config_cls.modality_config()
     transforms = data_config_cls.transform()
+    
+    if config.data_config2:
+        data_config_cls2 = DATA_CONFIG_MAP[config.data_config2]
+        modality_configs2 = data_config_cls2.modality_config()
+        transforms2 = data_config_cls2.transform()
+    else:
+        modality_configs2 = None
+        transforms2 = None
 
     # 1.2 data loader
     train_dataset = LeRobotSingleDataset(
@@ -138,9 +149,11 @@ def main(config: Config):
     )
 
     if config.dataset2_path:
+        assert modality_configs2 is not None
         dataset2 = LeRobotSingleDataset(
             dataset_path=config.dataset2_path,
-            modality_configs=modality_configs,
+            modality_configs=modality_configs2,
+            transforms=transforms2,
             embodiment_tag=embodiment_tag,
             video_backend=config.video_backend,
         )
@@ -187,7 +200,7 @@ def main(config: Config):
         gradient_accumulation_steps=1,
         dataloader_num_workers=config.dataloader_num_workers,
         dataloader_pin_memory=False,
-        dataloader_persistent_workers=True,
+        dataloader_persistent_workers=config.dataloader_num_workers > 0,
         optim="adamw_torch",
         adam_beta1=0.95,
         adam_beta2=0.999,
@@ -284,3 +297,10 @@ if __name__ == "__main__":
             env = os.environ.copy()
             env["IS_TORCHRUN"] = "1"
             sys.exit(subprocess.run(cmd, env=env).returncode)
+
+# python scripts/gr00t_finetune.py \
+# --dataset_path /datasets/so100_strawberry_grape \
+# --dataset2_path demo_data/robot_sim.PickNPlace \
+# --data_config so100 \
+# --data_config2 gr1_arms_only \
+# --video_backend torchvision_av \
