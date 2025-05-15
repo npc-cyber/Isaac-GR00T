@@ -55,25 +55,23 @@ def get_modality_keys(dataset_path: pathlib.Path) -> dict[str, list[str]]:
     return modality_dict
 
 
-def plot_state_action_space(state_dict: dict[str, np.ndarray], action_dict: dict[str, np.ndarray]):
+def plot_state_action_space(
+    state_dict: dict[str, np.ndarray],
+    action_dict: dict[str, np.ndarray],
+    shared_keys: list[str] = ["left_arm", "right_arm", "left_hand", "right_hand"],
+):
     """
     Plot the state and action space side by side.
 
     state_dict: dict[str, np.ndarray] with key: [Time, Dimension]
     action_dict: dict[str, np.ndarray] with key: [Time, Dimension]
+    shared_keys: list[str] of keys to plot (without the "state." or "action." prefix)
     """
-    # Calculate total number of plots needed
-    total_plots = len(state_dict) + len(action_dict)
-
-    # Create a figure with two columns - left for states, right for actions
-    fig = plt.figure(figsize=(16, 2 * max(len(state_dict), len(action_dict))))
+    # Create a figure with one subplot per shared key
+    fig = plt.figure(figsize=(16, 4 * len(shared_keys)))
 
     # Create GridSpec to organize the layout
-    gs = fig.add_gridspec(max(len(state_dict), len(action_dict)), 1)
-
-    # Plot state and action data together
-    # e.g. action.left_arm, state.left_arm, action.right_arm, state.right_arm, etc.
-    shared_keys = ["left_arm", "right_arm", "left_hand", "right_hand"]
+    gs = fig.add_gridspec(len(shared_keys), 1)
 
     # Color palette for different dimensions
     colors = plt.cm.tab10.colors
@@ -82,18 +80,35 @@ def plot_state_action_space(state_dict: dict[str, np.ndarray], action_dict: dict
         state_key = f"state.{key}"
         action_key = f"action.{key}"
 
-        # plot state and action data on the same plot
-        # and label the lines with the key
-        ax = fig.add_subplot(gs[i, 0])
+        # Skip if either key is not in the dictionaries
+        if state_key not in state_dict or action_key not in action_dict:
+            print(
+                f"Warning: Skipping {key} as it's not found in both state and action dictionaries"
+            )
+            continue
 
         # Get the data
         state_data = state_dict[state_key]
         action_data = action_dict[action_key]
 
+        print(f"{state_key}.shape: {state_data.shape}")
+        print(f"{action_key}.shape: {action_data.shape}")
+
+        # Create subplot
+        ax = fig.add_subplot(gs[i, 0])
+
         # Plot each dimension with a different color
-        for dim in range(state_data.shape[1]):
+        # Determine the minimum number of dimensions to plot
+        min_dims = min(state_data.shape[1], action_data.shape[1])
+
+        for dim in range(min_dims):
+            # Create time arrays for both state and action
+            state_time = np.arange(len(state_data))
+            action_time = np.arange(len(action_data))
+
             # State with dashed line
             ax.plot(
+                state_time,
                 state_data[:, dim],
                 "--",
                 color=colors[dim % len(colors)],
@@ -103,6 +118,7 @@ def plot_state_action_space(state_dict: dict[str, np.ndarray], action_dict: dict
 
             # Action with solid line (same color as corresponding state dimension)
             ax.plot(
+                action_time,
                 action_data[:, dim],
                 "-",
                 color=colors[dim % len(colors)],
@@ -188,31 +204,32 @@ def load_dataset(
         video_backend=video_backend,
     )
 
-    dataset2 = LeRobotSingleDataset(
-        dataset_path=dataset_path,
-        modality_configs=modality_configs,
-        embodiment_tag=embodiment_tag,
-        video_backend=video_backend,
-    )
+    if False:
+        dataset2 = LeRobotSingleDataset(
+            dataset_path=dataset_path,
+            modality_configs=modality_configs,
+            embodiment_tag=embodiment_tag,
+            video_backend=video_backend,
+        )
 
-    #   mixture_kwargs:
-    #     mode: train
-    #     balance_dataset_weights: true
-    #     seed: 42
-    #     metadata_config:
-    #       merge: true
-    #       percentile_mixing_method: min_max
-    dataset = LeRobotMixtureDataset(
-        data_mixture=[(dataset, 1.0), (dataset2, 1.0)],
-        mode="train",
-        balance_dataset_weights=True,
-        balance_trajectory_weights=True,
-        seed=42,
-        metadata_config={
-            "merge": True,
-            "percentile_mixing_method": "min_max",
-        },
-    )
+        #   mixture_kwargs:
+        #     mode: train
+        #     balance_dataset_weights: true
+        #     seed: 42
+        #     metadata_config:
+        #       merge: true
+        #       percentile_mixing_method: min_max
+        dataset = LeRobotMixtureDataset(
+            data_mixture=[(dataset, 1.0), (dataset2, 1.0)],
+            mode="train",
+            balance_dataset_weights=True,
+            balance_trajectory_weights=True,
+            seed=42,
+            metadata_config={
+                "merge": True,
+                "percentile_mixing_method": "min_max",
+            },
+        )
 
     print("\n" * 2)
     print("=" * 100)
@@ -262,9 +279,6 @@ def load_dataset(
         state_dict[state_key] = np.array(state_dict[state_key])
     for action_key in action_modality_keys:
         action_dict[action_key] = np.array(action_dict[action_key])
-
-    print(state_dict[state_modality_keys[0]].shape)
-    print(action_dict[action_modality_keys[0]].shape)
 
     if args.plot_state_action:
         plot_state_action_space(state_dict, action_dict)

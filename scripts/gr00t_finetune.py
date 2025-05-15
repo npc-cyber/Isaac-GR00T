@@ -130,7 +130,8 @@ def main(config: Config):
     data_config_cls = DATA_CONFIG_MAP[config.data_config]
     modality_configs = data_config_cls.modality_config()
     transforms = data_config_cls.transform()
-    
+
+    # used if we want to merge two datasets
     if config.data_config2:
         data_config_cls2 = DATA_CONFIG_MAP[config.data_config2]
         modality_configs2 = data_config_cls2.modality_config()
