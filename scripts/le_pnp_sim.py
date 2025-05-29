@@ -12,11 +12,6 @@ import cv2
 from util import *
 from common_msgs.msg import ArmDataCollect
 
-
-from gr00t.eval.service import ExternalRobotInferenceClient
-
-# print("RobotInferenceClient import success")
-
 import time
 
 
@@ -39,6 +34,7 @@ class PandaSimNode(Node):
         self.add_on_set_parameters_callback(self._parameter_callback)
         self.use_model = False
         if self.use_model:
+            from gr00t.eval.service import ExternalRobotInferenceClient
             try:
                 print(f"RobotInferenceClient")
                 # 先获取模型输入
@@ -128,7 +124,7 @@ class PandaSimNode(Node):
         self.proj_matrix = p.computeProjectionMatrixFOV(
             fov=60,  # 更广的垂直视场角
             aspect=CAMERA_WIDTH / CAMERA_HEIGHT,
-            nearVal=0.001,  # 调整近裁剪面
+            nearVal=0.0001,  # 调整近裁剪面
             farVal=2.0,  # 扩展远裁剪面
         )
 
@@ -241,11 +237,11 @@ class PandaSimNode(Node):
         rot_matrix = np.array(p.getMatrixFromQuaternion(ee_ori)).reshape(3, 3)
 
         # 相机位置：在末端执行器位置的基础上稍微偏移
-        cam_eye = ee_pos + rot_matrix @ np.array([0, 0, 0.0])  # 相机位置 (X,Y,Z)
-        cam_target = ee_pos + rot_matrix @ np.array([0, 0, 1])  # 注视方向
+        cam_eye = ee_pos + rot_matrix @ np.array([0.0, 0.03, -0.035])  # 相机位置 (X,Y,Z)
+        cam_target = ee_pos + rot_matrix @ np.array([0.0, 0.03, 1])  # 注视方向
 
         # 相机的上方向
-        up_vector = rot_matrix[2, :3]  # @ np.array([0, -1, 0])  # 调整上方向为向下
+        up_vector = np.linalg.inv(rot_matrix)[0, :3]  # @ np.array([0, -1, 0])  # 调整上方向为向下
 
         # 计算视图矩阵
         self.hand_view_matrix = p.computeViewMatrix(
@@ -264,7 +260,7 @@ class PandaSimNode(Node):
         )
         image = np.reshape(rgb, (CAMERA_HEIGHT, CAMERA_WIDTH, 4))[..., :3]
         self.hand_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        # cv2.imwrite("hand.jpg", image)
+        cv2.imwrite("hand.jpg", self.hand_image)
 
         # 如果需要发布图像到ROS话题，可以取消注释以下代码
         self.hand_ros_image = self.bridge.cv2_to_imgmsg(self.hand_image, encoding="bgr8")

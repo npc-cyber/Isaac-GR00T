@@ -23,7 +23,7 @@ jr = [7] * pandaNumDofs
 panda_arm_joint_positions = (
     np.array([90.0, 15.0, 0.0, -90.0, 0.0, 135.0, 45.0]) * np.pi / 180
 )
-panda_hand_joint_positions = np.array([0.08, 0.08])
+panda_hand_joint_positions = np.array([0.02, 0.02])
 # 两个合成一个np
 jointPositions = np.concatenate([panda_arm_joint_positions, panda_hand_joint_positions])
 rp = jointPositions
@@ -42,14 +42,13 @@ class PandaSim(object):
         self.current_target = None
         self.grasp_offset = -0.01  # 抓取高度偏移
         self.transport_height = 0.3  # 运输高度
-        self.position_threshold = 0.01  # 位置到达阈值
+        self.position_threshold = 0.005  # 位置到达阈值
         self.t = 0.0
 
         # 新增状态控制参数
         self.state = 0  # 0:空闲 1:移动至目标 2:抓取中 3:运输中
         self.control_dt = SIM_FREQ  # 控制周期
         self.finger_target = 0.06  # 夹爪目标位置 (0.06:张开，0.01:闭合)
-        self.gripper_height = 0.2  # 夹爪基准高度
 
         # 初始化环境
         self.prepare_sim_env()
