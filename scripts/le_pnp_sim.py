@@ -14,8 +14,9 @@ from common_msgs.msg import ArmDataCollect
 
 
 from gr00t.eval.service import ExternalRobotInferenceClient
+
 # print("RobotInferenceClient import success")
-    
+
 import time
 
 
@@ -53,29 +54,21 @@ class PandaSimNode(Node):
         # lerobot数据采集
         self.pub_all = True
         self.le_robot_data_pub = self.create_publisher(ArmDataCollect, "/le_robot_data", 10)
-        self.le_robot_data_timer = self.create_timer(
-            PUB_FREQ, self.le_robot_data_publish_step
-        )
+        self.le_robot_data_timer = self.create_timer(PUB_FREQ, self.le_robot_data_publish_step)
 
         if not self.pub_all:
             # 创建图像发布器
             self.top_image_pub = self.create_publisher(Image, "/pnp_sim/top_image_raw", 10)
-            self.hand_image_pub = self.create_publisher(
-                Image, "/pnp_sim/hand_image_raw", 10
-            )
+            self.hand_image_pub = self.create_publisher(Image, "/pnp_sim/hand_image_raw", 10)
             self.joint_state_pub = self.create_publisher(JointState, "/joint_states", 10)
             # 状态发布的定时器
-            self.top_image_publish_timer = self.create_timer(
-                PUB_FREQ, self.top_image_publish_step
-            )
+            self.top_image_publish_timer = self.create_timer(PUB_FREQ, self.top_image_publish_step)
             self.hand_image_publish_timer = self.create_timer(
                 PUB_FREQ, self.hand_image_publish_step
             )
             self.joint_states_publish_timer = self.create_timer(
                 PUB_FREQ, self.joint_states_publish_step
             )
-
-
 
     def _parameter_callback(self, params):
         """参数回调函数"""
@@ -150,11 +143,11 @@ class PandaSimNode(Node):
         if self.use_model:
             try:
                 # 初始化动作缓冲区
-                if not hasattr(self, 'action_buffer'):
+                if not hasattr(self, "action_buffer"):
                     self.action_buffer = None
                     self.action_counter = 0
                     self.need_new_inference = True
-                
+
                 # 如果需要新的推理
                 if self.need_new_inference:
                     # 收集观测数据
@@ -170,13 +163,13 @@ class PandaSimNode(Node):
                         "state.right_gripper": np.array(self.joints_angle[7:])[np.newaxis, :],
                         "annotation.human.action.task_description": ["Pick up the apple..."],
                     }
-                    
+
                     # 执行推理，获取16帧动作
                     self.action_buffer = self.policy_client.get_action(obs_dict)
                     self.action_counter = 0
                     self.need_new_inference = False
                     print("New inference completed, starting execution...")
-                
+
                 # 执行当前帧动作
                 if self.action_buffer is not None:
                     # 获取当前帧动作 (假设action_buffer是字典，包含多个动作序列)
@@ -184,21 +177,20 @@ class PandaSimNode(Node):
                         k: v[self.action_counter] if v.ndim > 1 else v
                         for k, v in self.action_buffer.items()
                     }
-                    combined_action = np.concatenate([
-                        current_action["action.right_arm"],
-                        current_action["action.right_gripper"]
-                    ])
+                    combined_action = np.concatenate(
+                        [current_action["action.right_arm"], current_action["action.right_gripper"]]
+                    )
                     # 执行动作 (这里需要根据你的实际需求实现)
-                    self.panda.step(self.use_model,combined_action)
+                    self.panda.step(self.use_model, combined_action)
                     p.stepSimulation()
-                    
+
                     # 更新计数器
                     self.action_counter += 1
-                    
+
                     # 检查是否需要重新推理
                     if self.action_counter >= 16:  # 假设每16帧重新推理一次
                         self.need_new_inference = True
-                
+
             except Exception as e:
                 print(f"simulation_step error: {str(e)}")
                 self.need_new_inference = True  # 出错时强制重新推理
@@ -290,6 +282,7 @@ class PandaSimNode(Node):
         self.joint_name = msg.name
         if not self.pub_all:
             self.joint_state_pub.publish(msg)
+
     # 使用装饰器
     @timer
     def le_robot_data_publish_step(self):
@@ -309,6 +302,7 @@ class PandaSimNode(Node):
             self.le_robot_data_pub.publish(msg)
         except Exception as e:
             print(f"le_robot_data_publish_step: {str(e)}")
+
     def destroy_node(self):
         p.disconnect()
         super().destroy_node()
