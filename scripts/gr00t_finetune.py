@@ -39,10 +39,10 @@ class Config:
     dataset_path: str
     """Path to the dataset directory."""
 
-    output_dir: str = "/tmp/gr00t"
+    output_dir: str = "/home/yangrui/workspace/gr00t/Isaac-GR00T/finetuned_models"
     """Directory to save model checkpoints."""
 
-    data_config: str = "gr1_arms_only"
+    data_config: str = "PandaRobot"
     """Data configuration name from DATA_CONFIG_MAP."""
 
     # Training parameters
@@ -59,7 +59,7 @@ class Config:
     """Number of steps between saving checkpoints."""
 
     # Model parameters
-    base_model_path: str = "nvidia/GR00T-N1-2B"
+    base_model_path: str = "/home/yangrui/workspace/gr00t/pretrained_para/para/paraln"
     """Path or HuggingFace model ID for the base model."""
 
     tune_llm: bool = False
@@ -142,6 +142,7 @@ def main(config: Config):
         tune_projector=config.tune_projector,  # action head's projector
         tune_diffusion_model=config.tune_diffusion_model,  # action head's DiT
     )
+    print("model loaded")
 
     # Set the model's compute_dtype to bfloat16
     model.compute_dtype = "bfloat16"

@@ -174,6 +174,7 @@ class GR00T_N1(PreTrainedModel):
     ) -> BatchFeature:
         backbone_inputs, action_inputs = self.prepare_input(inputs)
         # Because the behavior of backbones remains the same for training and inference, we can use `forward` for backbones.
+        # 模型的输入
         backbone_outputs = self.backbone(backbone_inputs)
         action_head_outputs = self.action_head.get_action(backbone_outputs, action_inputs)
         self.validate_data(action_head_outputs, backbone_outputs, is_training=False)
@@ -181,7 +182,9 @@ class GR00T_N1(PreTrainedModel):
 
     def prepare_input(self, inputs) -> Tuple[BatchFeature, BatchFeature]:
         self.validate_inputs(inputs)
+        # 两个 prepare_input 是一模一样的 他么的结果也一模一样 
         backbone_inputs = self.backbone.prepare_input(inputs)
+        # 难道说这个地方只要了关节的状态
         action_inputs = self.action_head.prepare_input(inputs)
 
         def to_device_with_maybe_dtype(x):
@@ -220,7 +223,8 @@ class GR00T_N1(PreTrainedModel):
                 f"Model not found or avail in the huggingface hub. Loading from local path: {pretrained_model_name_or_path}"
             )
             local_model_path = pretrained_model_name_or_path
-
+        # local_model_path = pretrained_model_name_or_path
+        # print(f"Loading model from {local_model_path}")
         pretrained_model = super().from_pretrained(
             local_model_path, local_model_path=local_model_path, **kwargs
         )

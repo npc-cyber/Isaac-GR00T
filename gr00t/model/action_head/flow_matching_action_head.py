@@ -331,6 +331,7 @@ class FlowmatchingActionHead(nn.Module):
         # Set initial actions as the sampled noise.
         batch_size = vl_embeds.shape[0]
         device = vl_embeds.device
+        # 这个地方是直接生成噪声 self.config.action_horizon 是生成的步数
         actions = torch.randn(
             size=(batch_size, self.config.action_horizon, self.config.action_dim),
             dtype=vl_embeds.dtype,
@@ -341,6 +342,7 @@ class FlowmatchingActionHead(nn.Module):
         dt = 1.0 / num_steps
 
         # Run denoising steps.
+        # 迭代处理这个action
         for t in range(num_steps):
             t_cont = t / float(num_steps)  # e.g. goes 0, 1/N, 2/N, ...
             t_discretized = int(t_cont * self.num_timestep_buckets)

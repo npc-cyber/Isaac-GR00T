@@ -124,3 +124,8 @@ tmp/
 output/
 
 demo_data/
+bullet_data/panda/
+bullet_data/ros*
+bullet_data/build/
+bullet_data/log/
+bullet_data/install/

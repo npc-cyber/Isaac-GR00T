@@ -61,7 +61,7 @@ class Gr00tPolicy(BasePolicy):
     and metadata related to the model checkpoints used
     in the Gr00t model.
     """
-
+    # 实打实的模型
     def __init__(
         self,
         model_path: str,
@@ -231,6 +231,7 @@ class Gr00tPolicy(BasePolicy):
         return True
 
     def _load_model(self, model_path):
+        # 模型的加载地方
         model = GR00T_N1.from_pretrained(model_path, torch_dtype=COMPUTE_DTYPE)
         model.eval()  # Set model to eval mode
         model.to(device=self.device)  # type: ignore
