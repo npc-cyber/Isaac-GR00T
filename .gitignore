@@ -122,3 +122,10 @@ playground/
 demo_data/gr00t-gr1-apple-to-shelf/
 tmp/
 output/
+
+demo_data/
+bullet_data/panda/
+bullet_data/data/ros*
+bullet_data/build/
+bullet_data/log/
+bullet_data/install/

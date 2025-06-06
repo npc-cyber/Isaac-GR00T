@@ -179,6 +179,7 @@ class EagleBackbone(nn.Module):
 
     def forward(self, vl_input: BatchFeature) -> BatchFeature:
         # 0. Set frozen module to eval
+        # 冻结不需要训练的参数 一般是语言
         self.set_frozen_modules_to_eval_mode()
 
         embeddings = get_embeddings(

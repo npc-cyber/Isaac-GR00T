@@ -27,6 +27,7 @@ class RobotInferenceServer(BaseInferenceServer):
 
     def __init__(self, model, host: str = "*", port: int = 5555):
         super().__init__(host, port)
+        # 他其实自己不是模型 而是传入了一个模型进来而已
         self.register_endpoint("get_action", model.get_action)
         self.register_endpoint(
             "get_modality_config", model.get_modality_config, requires_input=False

@@ -46,11 +46,11 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default="localhost", help="host")
     parser.add_argument("--port", type=int, default=5555, help="port")
     parser.add_argument("--plot", action="store_true", help="plot images")
-    parser.add_argument("--modality_keys", nargs="+", type=str, default=["right_arm", "right_hand"])
+    parser.add_argument("--modality_keys", nargs="+", type=str, default=["right_arm", "right_gripper"])
     parser.add_argument(
         "--data_config",
         type=str,
-        default="gr1_arms_only",
+        default="PandaRobot",
         choices=list(DATA_CONFIG_MAP.keys()),
         help="data config name",
     )
@@ -58,18 +58,18 @@ if __name__ == "__main__":
     parser.add_argument("--trajs", type=int, default=1, help="trajectories to run")
     parser.add_argument("--action_horizon", type=int, default=16)
     parser.add_argument("--video_backend", type=str, default="decord")
-    parser.add_argument("--dataset_path", type=str, default="demo_data/robot_sim.PickNPlace/")
+    parser.add_argument("--dataset_path", type=str, default="demo_data/panda.PickNPlace/")
     parser.add_argument(
         "--embodiment_tag",
         type=str,
         help="The embodiment tag for the model.",
-        default="gr1",
+        default="new_embodiment",
     )
     ## When using a model instead of client-server mode.
     parser.add_argument(
         "--model_path",
         type=str,
-        default=None,
+        default="../checkpoint",
         help="[Optional] Path to the model checkpoint directory, this will disable client server mode.",
     )
     parser.add_argument(

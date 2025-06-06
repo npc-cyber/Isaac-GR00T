@@ -39,27 +39,27 @@ class Config:
     dataset_path: str
     """Path to the dataset directory."""
 
-    output_dir: str = "/tmp/gr00t"
+    output_dir: str = "/home/yangrui/workspace/gr00t/Isaac-GR00T/finetuned_models"
     """Directory to save model checkpoints."""
 
-    data_config: str = "gr1_arms_only"
+    data_config: str = "PandaRobot"
     """Data configuration name from DATA_CONFIG_MAP."""
 
     # Training parameters
     batch_size: int = 16
     """Batch size per GPU for training."""
 
-    max_steps: int = 10000
+    max_steps: int = 7500
     """Maximum number of training steps."""
 
     num_gpus: int = 1
     """Number of GPUs to use for training."""
 
-    save_steps: int = 500
+    save_steps: int = 2500
     """Number of steps between saving checkpoints."""
 
     # Model parameters
-    base_model_path: str = "nvidia/GR00T-N1-2B"
+    base_model_path: str = "/home/yangrui/workspace/gr00t/pretrained_para/para/paraln"
     """Path or HuggingFace model ID for the base model."""
 
     tune_llm: bool = False
@@ -142,6 +142,7 @@ def main(config: Config):
         tune_projector=config.tune_projector,  # action head's projector
         tune_diffusion_model=config.tune_diffusion_model,  # action head's DiT
     )
+    print("model loaded")
 
     # Set the model's compute_dtype to bfloat16
     model.compute_dtype = "bfloat16"
@@ -227,7 +228,7 @@ if __name__ == "__main__":
 
     if config.num_gpus == 1:
         # Single GPU mode - set CUDA_VISIBLE_DEVICES=0
-        os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+        os.environ["CUDA_VISIBLE_DEVICES"] = "1"
         # Run the script normally
         main(config)
     else:

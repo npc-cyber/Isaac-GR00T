@@ -62,6 +62,8 @@ class SinusoidalPositionalEncoding(nn.Module):
         return enc
 
 
+# 每个类别 num_categories 对应一个 线性层
+# 隐藏层 hidden_dim
 class CategorySpecificLinear(nn.Module):
     def __init__(self, num_categories, input_dim, hidden_dim):
         super().__init__()
@@ -71,15 +73,20 @@ class CategorySpecificLinear(nn.Module):
         self.b = nn.Parameter(torch.zeros(num_categories, hidden_dim))
 
     def forward(self, x, cat_ids):
+        # print("CategorySpecificLinear",x.shape) # [4, 2#时间序列, 5]
+        # print("self.W",self.W.shape) # [3#类别, 5, 8]
         selected_W = self.W[cat_ids]
         selected_b = self.b[cat_ids]
         return torch.bmm(x, selected_W) + selected_b.unsqueeze(1)
 
 
+# 这个地方是mlp 每个类别对应一个 MLP
 class CategorySpecificMLP(nn.Module):
     def __init__(self, num_categories, input_dim, hidden_dim, output_dim):
         super().__init__()
         self.num_categories = num_categories
+        # 两个线性层嵌套 
+        # input_dim -> hidden_dim -> output_dim
         self.layer1 = CategorySpecificLinear(num_categories, input_dim, hidden_dim)
         self.layer2 = CategorySpecificLinear(num_categories, hidden_dim, output_dim)
 
@@ -272,6 +279,7 @@ class FlowmatchingActionHead(nn.Module):
         device = vl_embeds.device
 
         # Get embodiment ID.
+        # 对于 new_embodiment id 是 31 这个是自己设置的id
         embodiment_id = action_input.embodiment_id
 
         # Embed state.
@@ -331,6 +339,7 @@ class FlowmatchingActionHead(nn.Module):
         # Set initial actions as the sampled noise.
         batch_size = vl_embeds.shape[0]
         device = vl_embeds.device
+        # 这个地方是直接生成噪声 self.config.action_horizon 是生成的步数
         actions = torch.randn(
             size=(batch_size, self.config.action_horizon, self.config.action_dim),
             dtype=vl_embeds.dtype,
@@ -341,6 +350,7 @@ class FlowmatchingActionHead(nn.Module):
         dt = 1.0 / num_steps
 
         # Run denoising steps.
+        # 迭代处理这个action
         for t in range(num_steps):
             t_cont = t / float(num_steps)  # e.g. goes 0, 1/N, 2/N, ...
             t_discretized = int(t_cont * self.num_timestep_buckets)
@@ -349,13 +359,17 @@ class FlowmatchingActionHead(nn.Module):
             timesteps_tensor = torch.full(
                 size=(batch_size,), fill_value=t_discretized, device=device
             )
+            #  action最开始是噪声
+            #  action 生成 action_features
             action_features = self.action_encoder(actions, timesteps_tensor, embodiment_id)
             # Maybe add position embedding.
             if self.config.add_pos_embed:
+                # shape[1] 是其中一个维度啊
                 pos_ids = torch.arange(action_features.shape[1], dtype=torch.long, device=device)
                 pos_embs = self.position_embedding(pos_ids).unsqueeze(0)
                 action_features = action_features + pos_embs
 
+            # 上一步 backbone_output 就只在这个地方用到了
             vl_embs = vl_embeds
 
             # Join vision, language, state and action embedding along sequence dimension.
@@ -372,6 +386,7 @@ class FlowmatchingActionHead(nn.Module):
             pred_velocity = pred[:, -self.action_horizon :]
 
             # Update actions using euler integration.
+            # 编码后得到速度 加到 actions
             actions = actions + dt * pred_velocity
         return BatchFeature(data={"action_pred": actions})
 

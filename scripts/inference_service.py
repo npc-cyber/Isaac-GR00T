@@ -27,20 +27,20 @@ if __name__ == "__main__":
         "--model_path",
         type=str,
         help="Path to the model checkpoint directory.",
-        default="nvidia/GR00T-N1-2B",
+        default="/home/yangrui/trilib/groot/checkpoint",
     )
     parser.add_argument(
         "--embodiment_tag",
         type=str,
         help="The embodiment tag for the model.",
-        default="gr1",
+        default="new_embodiment",
     )
     parser.add_argument(
         "--data_config",
         type=str,
         help="The name of the data config to use.",
         choices=list(DATA_CONFIG_MAP.keys()),
-        default="gr1_arms_waist",
+        default="PandaRobot",
     )
 
     parser.add_argument("--port", type=int, help="Port number for the server.", default=5555)
@@ -92,7 +92,7 @@ if __name__ == "__main__":
 
         print("Available modality config available:")
         modality_configs = policy_client.get_modality_config()
-        print(modality_configs.keys())
+        # print(modality_configs.keys())
 
         # Making prediction...
         # - obs: video.ego_view: (1, 256, 256, 3)
@@ -108,21 +108,18 @@ if __name__ == "__main__":
         # - action: action.right_hand: (16, 6)
         # - action: action.waist: (16, 3)
         obs = {
-            "video.ego_view": np.random.randint(0, 256, (1, 256, 256, 3), dtype=np.uint8),
-            "state.left_arm": np.random.rand(1, 7),
+            "video.right_view": np.random.randint(0, 256, (1, 256, 256, 3), dtype=np.uint8),
+            "video.head_view": np.random.randint(0, 256, (1, 256, 256, 3), dtype=np.uint8),
             "state.right_arm": np.random.rand(1, 7),
-            "state.left_hand": np.random.rand(1, 6),
-            "state.right_hand": np.random.rand(1, 6),
-            "state.waist": np.random.rand(1, 3),
-            "annotation.human.action.task_description": ["do your thing!"],
+            "state.right_gripper": np.random.rand(1, 2),
+            "annotation.human.action.task_description": ["Pick up the apple and place it on other box."],
         }
 
         time_start = time.time()
         action = policy_client.get_action(obs)
         print(f"Total time taken to get action from server: {time.time() - time_start} seconds")
 
-        for key, value in action.items():
-            print(f"Action: {key}: {value.shape}")
-
+        # for key, value in action.items():
+        #     print(f"Action: {key}: {value}")
     else:
         raise ValueError("Please specify either --server or --client")

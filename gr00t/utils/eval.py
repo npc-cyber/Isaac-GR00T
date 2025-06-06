@@ -117,6 +117,8 @@ def calc_mse_for_single_trajectory(
             ax.legend()
 
         plt.tight_layout()
-        plt.show()
+        # plt.show()
+        plt.savefig("trajectory_plot.png", dpi=300, bbox_inches='tight')
+        plt.close()  # 释放内存
 
     return mse

@@ -78,8 +78,10 @@ class GR00T_N1(PreTrainedModel):
         super().__init__(config)
         self.local_model_path = local_model_path
 
+        # 这个地方是视觉语言模型 有源码的
         self.backbone = EagleBackbone(**config.backbone_cfg)
         action_head_cfg = FlowmatchingActionHeadConfig(**config.action_head_cfg)
+        # 这个地方是 state action模型
         self.action_head = FlowmatchingActionHead(action_head_cfg)
 
         self.action_horizon = config.action_horizon
@@ -162,6 +164,13 @@ class GR00T_N1(PreTrainedModel):
         self,
         inputs: dict,
     ) -> BatchFeature:
+        print("forward Input keys and shapes:")
+        for key in inputs.keys():
+            try:
+                # 通用shape打印，兼容numpy数组和torch张量
+                print(f"{key}: {inputs[key].shape}")  
+            except AttributeError:
+                print(f"{key}: No shape attribute")  
         backbone_inputs, action_inputs = self.prepare_input(inputs)
         backbone_outputs = self.backbone(backbone_inputs)
         action_head_outputs = self.action_head(backbone_outputs, action_inputs)
@@ -172,15 +181,33 @@ class GR00T_N1(PreTrainedModel):
         self,
         inputs: dict,
     ) -> BatchFeature:
+        # print("get_action Input keys and shapes:")
+        # for key in inputs.keys():
+        #     try:
+        #         # 通用shape打印，兼容numpy数组和torch张量
+        #         print(f"{key}: {inputs[key].shape}")
+        #         # 这个地方虽然维度比我们的输入维度高 那是预留了state的位置 用0占位
+        #         if key == "state":
+        #             print(f"{key}: {inputs[key]}")
+        #         # 这个地方的mask跟着输入来的 有效的位置为True  无效的位置为False
+        #         if key == "state_mask":
+        #             print(f"{key}: {inputs[key]}")
+        #     except AttributeError:
+        #         print(f"{key}: No shape attribute")
         backbone_inputs, action_inputs = self.prepare_input(inputs)
         # Because the behavior of backbones remains the same for training and inference, we can use `forward` for backbones.
+        # 模型的输入
         backbone_outputs = self.backbone(backbone_inputs)
         action_head_outputs = self.action_head.get_action(backbone_outputs, action_inputs)
         self.validate_data(action_head_outputs, backbone_outputs, is_training=False)
         return action_head_outputs
 
     def prepare_input(self, inputs) -> Tuple[BatchFeature, BatchFeature]:
+        # 这个函数其实没做什么
+        # 两个 prepare_input 是一模一样的 他么的结果也一模一样 
+        # 难道说这个地方只要了关节的状态
         self.validate_inputs(inputs)
+
         backbone_inputs = self.backbone.prepare_input(inputs)
         action_inputs = self.action_head.prepare_input(inputs)
 
@@ -220,7 +247,8 @@ class GR00T_N1(PreTrainedModel):
                 f"Model not found or avail in the huggingface hub. Loading from local path: {pretrained_model_name_or_path}"
             )
             local_model_path = pretrained_model_name_or_path
-
+        # local_model_path = pretrained_model_name_or_path
+        # print(f"Loading model from {local_model_path}")
         pretrained_model = super().from_pretrained(
             local_model_path, local_model_path=local_model_path, **kwargs
         )
