@@ -296,7 +296,7 @@ class EagleProcessor:
                 template="qwen2-chat",
                 num_image_token=64,
             )
-
+        # 视觉与语言的预处理 是直接通过这个库的
         tokenizer = AutoTokenizer.from_pretrained(
             model_path, trust_remote_code=True, use_fast=False
         )
@@ -427,6 +427,7 @@ class EagleProcessor:
             question=question,
             history=history,
         )
+        # 在这个地方进行了视觉与语言的预处理
         data = {
             "pixel_values": pixel_values,
             "input_ids": input_ids,

@@ -327,8 +327,12 @@ class FlowmatchingActionHead(nn.Module):
         }
         return BatchFeature(data=output_dict)
 
+    # 喔喔 这个地方其实就是没有梯度了
     @torch.no_grad()
     def get_action(self, backbone_output: BatchFeature, action_input: BatchFeature) -> BatchFeature:
+        # 视觉语言的输出就是这个了
+        print("FlowmatchingActionHead get_action",backbone_output["backbone_features"].shape)
+        print("FlowmatchingActionHead get_action",backbone_output["backbone_attention_mask"].shape)
         # Get vision and language embeddings.
         vl_embeds = backbone_output.backbone_features
         embodiment_id = action_input.embodiment_id

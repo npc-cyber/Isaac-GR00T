@@ -181,19 +181,29 @@ class GR00T_N1(PreTrainedModel):
         self,
         inputs: dict,
     ) -> BatchFeature:
-        # print("get_action Input keys and shapes:")
-        # for key in inputs.keys():
-        #     try:
-        #         # 通用shape打印，兼容numpy数组和torch张量
-        #         print(f"{key}: {inputs[key].shape}")
-        #         # 这个地方虽然维度比我们的输入维度高 那是预留了state的位置 用0占位
-        #         if key == "state":
-        #             print(f"{key}: {inputs[key]}")
-        #         # 这个地方的mask跟着输入来的 有效的位置为True  无效的位置为False
-        #         if key == "state_mask":
-        #             print(f"{key}: {inputs[key]}")
-        #     except AttributeError:
-        #         print(f"{key}: No shape attribute")
+        print("get_action Input keys and shapes:")
+        # "embodiment_id" 是自己设置的id
+        # "pixel_values" 是所有图像，不过resize了一下
+        # "input_ids" 是什么
+        # "attention_mask" 是什么
+        for key in inputs.keys():
+            try:
+                # 通用shape打印，兼容numpy数组和torch张量
+                print(f"{key}: {inputs[key].shape}")
+                # # 这个地方虽然维度比我们的输入维度高 那是预留了state的位置 用0占位
+                # if key == "state":
+                #     print(f"{key}: {inputs[key]}")
+                # # 这个地方的mask跟着输入来的 有效的位置为True  无效的位置为False
+                # if key == "state_mask":
+                #     print(f"{key}: {inputs[key]}")
+                # # 这个地方应该是语言的预处理
+                # if key == "input_ids":
+                #     print(f"{key}: {inputs[key]}")
+                # # 这个地方应该是语言的预处理
+                # if key == "attention_mask":
+                #     print(f"{key}: {inputs[key]}")
+            except AttributeError:
+                print(f"{key}: No shape attribute")
         backbone_inputs, action_inputs = self.prepare_input(inputs)
         # Because the behavior of backbones remains the same for training and inference, we can use `forward` for backbones.
         # 模型的输入

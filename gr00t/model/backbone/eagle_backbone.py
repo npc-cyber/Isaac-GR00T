@@ -193,6 +193,7 @@ class EagleBackbone(nn.Module):
         embeddings = self.linear(embeddings)
 
         attention_mask = vl_input["attention_mask"]
+        # 这个是视觉语言的输出
         return BatchFeature(
             data={
                 "backbone_features": embeddings,

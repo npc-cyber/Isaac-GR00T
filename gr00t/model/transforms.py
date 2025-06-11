@@ -38,6 +38,7 @@ def collate_gr00t(features: List[dict], processor) -> dict:
 
     for key in keys:
         values = [elem[key] for elem in features]
+        # print("collate_gr00t",key)
         if key not in EAGLE_KEYS:
             # state, state_mask, action and action_mask.
             # Stack to form the batch dimension.
@@ -169,6 +170,7 @@ class GR00TTransform(InvertibleModalityTransform):
                 "image": images,
             },
         ]
+        # 这个地方调用了那个 其实还是prepare 没有进模型 
         inputs = self.vlm_processor.prepare_input({"prompt": prompt})
         return inputs
 
